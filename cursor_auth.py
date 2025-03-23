@@ -1,4 +1,3 @@
-# coding:utf-8
 import time
 from browser_utils import BrowserManager
 from urllib.parse import unquote
@@ -248,6 +247,8 @@ if __name__ == "__main__":
     success = bot.run()
     if not success:
         print("\n程序执行失败！")
+        input()
         sys.exit(1)
     else:
         print("\n程序执行成功！") 
+        input()
