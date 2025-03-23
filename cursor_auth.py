@@ -1,3 +1,4 @@
+# coding:utf-8
 import time
 from browser_utils import BrowserManager
 from urllib.parse import unquote
