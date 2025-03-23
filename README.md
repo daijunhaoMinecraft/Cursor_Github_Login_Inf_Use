@@ -13,6 +13,7 @@
 ![PixPin_2025-03-23_16-14-28.png](https://x19.fp.ps.netease.com/file/67dfc30c3d2b0e85fe64e50dff1QT7Hp06)
 # 注意事项
 本软件目前没有MacOS版本(有的话还不知道能不能运行起来,推荐使用Cursor增加对MacOS的支持)<br />
+同时也没有对最新版本的Cursor进行适配,[Cursor 0.44.11 Windows安装包](https://downloader.cursor.sh/builds/250103fqxdt5u9z/windows/nsis/x64)<br />
 你不能倒卖此软件,同时你需要遵守GPL-3.0 license协议<br />
 # 使用到的项目
 [Cursor-auto-free](https://github.com/chengazhen/cursor-auto-free)
