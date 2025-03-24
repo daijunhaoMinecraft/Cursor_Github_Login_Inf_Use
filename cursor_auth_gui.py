@@ -8,9 +8,31 @@ from qfluentwidgets import (NavigationInterface, NavigationItemPosition, Message
                           PushButton, ProgressBar, TextEdit, InfoBar, InfoBarPosition,
                           FluentIcon, isDarkTheme, CardWidget, SwitchButton, 
                           TitleLabel, StrongBodyLabel, SettingCardGroup, SwitchSettingCard,
-                          qconfig, ConfigItem, QConfig)
+                          qconfig, ConfigItem, QConfig, PrimaryPushSettingCard, SettingCard,
+                          ComboBoxSettingCard, PushButton)
 from qfluentwidgets import FluentWindow, SubtitleLabel, setTheme, Theme, NavigationWidget
 from cursor_auth import CursorAuthBot
+import webbrowser
+import io
+from contextlib import redirect_stdout, redirect_stderr
+
+class ConsoleRedirect:
+    """将标准输出和错误输出重定向到GUI的类"""
+    def __init__(self, signal):
+        self.signal = signal
+        self.buffer = io.StringIO()
+        
+    def write(self, text):
+        self.buffer.write(text)
+        if text.endswith('\n'):
+            self.flush()
+            
+    def flush(self):
+        text = self.buffer.getvalue()
+        if text:
+            self.signal.emit(text.rstrip())
+            self.buffer.seek(0)
+            self.buffer.truncate()
 
 # 创建配置项
 class Config(QConfig):
@@ -24,6 +46,7 @@ class AuthWorker(QThread):
     progress_updated = pyqtSignal(str, int)  # 进度信息和百分比
     finished = pyqtSignal(bool, str)  # 成功/失败状态和消息
     log_updated = pyqtSignal(str)  # 详细日志信息
+    console_output = pyqtSignal(str)  # 控制台输出信号
 
     def log(self, message):
         """输出带时间戳的日志"""
@@ -32,88 +55,93 @@ class AuthWorker(QThread):
 
     def run(self):
         try:
-            bot = CursorAuthBot()
+            # 重定向标准输出和错误输出
+            stdout_redirect = ConsoleRedirect(self.console_output)
+            stderr_redirect = ConsoleRedirect(self.console_output)
             
-            # 初始化浏览器
-            self.progress_updated.emit("正在初始化浏览器...", 10)
-            self.log("开始初始化浏览器...")
-            bot.init_browser()
-            self.log("浏览器初始化完成")
-            
-            # 第一次登录
-            self.progress_updated.emit("正在获取GitHub认证链接...", 20)
-            self.log("正在获取GitHub认证链接...")
-            auth_link = bot.get_github_auth_link()
-            self.log(f"获取到认证链接: {auth_link}")
-            
-            self.progress_updated.emit("正在打开认证链接...", 30)
-            self.log("正在打开认证链接...")
-            bot.tab.get(auth_link)
-            
-            self.progress_updated.emit("等待获取cookies...", 40)
-            self.log("正在获取第一次登录的cookies...")
-            cookies = bot.get_cursor_cookies()
-            
-            if not cookies:
-                self.log("无法获取cookies，认证失败")
-                self.finished.emit(False, "无法获取cookies")
-                return
-            
-            self.log(f"成功获取cookies: {json.dumps(cookies, indent=2, ensure_ascii=False)}")
+            with redirect_stdout(stdout_redirect), redirect_stderr(stderr_redirect):
+                bot = CursorAuthBot()
                 
-            # 发送删除请求
-            self.progress_updated.emit("正在发送删除请求...", 50)
-            self.log("正在发送删除账号请求...")
-            bot.send_delete_request(cookies)
-            self.log("删除请求已发送")
-            
-            # 第二次登录
-            self.progress_updated.emit("正在进行第二次登录...", 60)
-            self.log("开始第二次登录流程...")
-            auth_link = bot.get_github_auth_link()
-            bot.tab.get(auth_link)
-            
-            self.progress_updated.emit("正在获取新的cookies...", 70)
-            self.log("正在获取第二次登录的cookies...")
-            new_cookies = bot.get_cursor_cookies(max_retries=5)
-            
-            if not new_cookies:
-                self.log("无法获取新的cookies，认证失败")
-                self.finished.emit(False, "无法获取新的cookies")
-                return
-            
-            self.log(f"成功获取新cookies: {json.dumps(new_cookies, indent=2, ensure_ascii=False)}")
+                # 初始化浏览器
+                self.progress_updated.emit("正在初始化浏览器...", 10)
+                self.log("开始初始化浏览器...")
+                bot.init_browser()
+                self.log("浏览器初始化完成")
                 
-            # 获取用户信息
-            self.progress_updated.emit("正在获取用户信息...", 80)
-            self.log("正在获取用户信息...")
-            user_info = bot.get_user_info(new_cookies)
-            
-            if not user_info or 'email' not in user_info:
-                self.log("无法获取用户邮箱信息")
-                self.finished.emit(False, "无法获取用户邮箱")
-                return
-            
-            self.log(f"获取到用户信息: {json.dumps(user_info, indent=2, ensure_ascii=False)}")
+                # 第一次登录
+                self.progress_updated.emit("正在获取GitHub认证链接...", 20)
+                self.log("正在获取GitHub认证链接...")
+                auth_link = bot.get_github_auth_link()
+                self.log(f"获取到认证链接: {auth_link}")
                 
-            # 重置机器码
-            self.progress_updated.emit("正在重置机器码...", 90)
-            self.log("正在重置机器码...")
-            bot.machine_resetter.reset_machine_ids()
-            self.log("机器码重置完成")
-            
-            # 更新认证信息
-            self.progress_updated.emit("正在更新认证信息...", 95)
-            self.log("正在更新认证信息...")
-            if not bot.update_auth_info(user_info['email'], new_cookies):
-                self.log("更新认证信息失败")
-                self.finished.emit(False, "更新认证信息失败")
-                return
-            
-            self.log("认证信息更新成功")
-            self.progress_updated.emit("操作完成！", 100)
-            self.finished.emit(True, "认证过程完成！")
-            
+                self.progress_updated.emit("正在打开认证链接...", 30)
+                self.log("正在打开认证链接...")
+                bot.tab.get(auth_link)
+                
+                self.progress_updated.emit("等待获取cookies...", 40)
+                self.log("正在获取第一次登录的cookies...")
+                cookies = bot.get_cursor_cookies()
+                
+                if not cookies:
+                    self.log("无法获取cookies，认证失败")
+                    self.finished.emit(False, "无法获取cookies")
+                    return
+                
+                self.log(f"成功获取cookies: {json.dumps(cookies, indent=2, ensure_ascii=False)}")
+                    
+                # 发送删除请求
+                self.progress_updated.emit("正在发送删除请求...", 50)
+                self.log("正在发送删除账号请求...")
+                bot.send_delete_request(cookies)
+                self.log("删除请求已发送")
+                
+                # 第二次登录
+                self.progress_updated.emit("正在进行第二次登录...", 60)
+                self.log("开始第二次登录流程...")
+                auth_link = bot.get_github_auth_link()
+                bot.tab.get(auth_link)
+                
+                self.progress_updated.emit("正在获取新的cookies...", 70)
+                self.log("正在获取第二次登录的cookies...")
+                new_cookies = bot.get_cursor_cookies(max_retries=5)
+                
+                if not new_cookies:
+                    self.log("无法获取新的cookies，认证失败")
+                    self.finished.emit(False, "无法获取新的cookies")
+                    return
+                
+                self.log(f"成功获取新cookies: {json.dumps(new_cookies, indent=2, ensure_ascii=False)}")
+                    
+                # 获取用户信息
+                self.progress_updated.emit("正在获取用户信息...", 80)
+                self.log("正在获取用户信息...")
+                user_info = bot.get_user_info(new_cookies)
+                
+                if not user_info or 'email' not in user_info:
+                    self.log("无法获取用户邮箱信息")
+                    self.finished.emit(False, "无法获取用户邮箱")
+                    return
+                
+                self.log(f"获取到用户信息: {json.dumps(user_info, indent=2, ensure_ascii=False)}")
+                    
+                # 重置机器码
+                self.progress_updated.emit("正在重置机器码...", 90)
+                self.log("正在重置机器码...")
+                bot.machine_resetter.reset_machine_ids()
+                self.log("机器码重置完成")
+                
+                # 更新认证信息
+                self.progress_updated.emit("正在更新认证信息...", 95)
+                self.log("正在更新认证信息...")
+                if not bot.update_auth_info(user_info['email'], new_cookies):
+                    self.log("更新认证信息失败")
+                    self.finished.emit(False, "更新认证信息失败")
+                    return
+                
+                self.log("认证信息更新成功")
+                self.progress_updated.emit("操作完成！", 100)
+                self.finished.emit(True, "认证过程完成！")
+                
         except Exception as e:
             self.log(f"发生错误: {str(e)}")
             self.finished.emit(False, f"发生错误: {str(e)}")
@@ -237,6 +265,9 @@ class MainWindow(FluentWindow):
         self.navigation = NavigationInterface(self, showReturnButton=True)
         self.navigation.setExpandWidth(300)  # 设置展开宽度
         
+        # 创建准备步骤界面
+        self.preparation_interface = PreparationInterface(self)
+        
         # 创建设置界面
         self.settings_interface = SettingsInterface(self)
         
@@ -245,6 +276,14 @@ class MainWindow(FluentWindow):
             self.main_widget,
             icon=FluentIcon.HOME,
             text="主页",
+            position=NavigationItemPosition.TOP
+        )
+        
+        # 添加准备步骤界面
+        self.addSubInterface(
+            self.preparation_interface,
+            icon=FluentIcon.CHECKBOX,
+            text="准备步骤",
             position=NavigationItemPosition.TOP
         )
         
@@ -301,6 +340,7 @@ class MainWindow(FluentWindow):
         self.worker = AuthWorker()
         self.worker.progress_updated.connect(self.update_progress)
         self.worker.log_updated.connect(self.update_log)
+        self.worker.console_output.connect(self.update_console)
         self.worker.finished.connect(self.auth_finished)
         self.worker.start()
         
@@ -312,6 +352,14 @@ class MainWindow(FluentWindow):
     def update_log(self, message):
         """更新日志信息"""
         self.log_edit.append(message)
+        # 自动滚动到底部
+        self.log_edit.verticalScrollBar().setValue(
+            self.log_edit.verticalScrollBar().maximum()
+        )
+        
+    def update_console(self, message):
+        """更新控制台输出"""
+        self.log_edit.append(f"[Console] {message}")
         # 自动滚动到底部
         self.log_edit.verticalScrollBar().setValue(
             self.log_edit.verticalScrollBar().maximum()
@@ -344,6 +392,83 @@ class MainWindow(FluentWindow):
                 parent=self
             )
             
+class PreparationInterface(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setObjectName('preparationInterface')
+        
+        # 创建布局
+        self.vBoxLayout = QVBoxLayout(self)
+        self.vBoxLayout.setContentsMargins(36, 30, 36, 0)
+        
+        # 创建浏览器检查组
+        self.browser_group = SettingCardGroup("浏览器准备", self)
+        
+        # 创建Chrome官网链接卡片
+        self.chrome_link_card = PrimaryPushSettingCard(
+            self.tr('下载Chrome浏览器'),
+            FluentIcon.LINK,
+            "需要使用Chrome浏览器",
+            "点击下载Chrome浏览器",
+            self.browser_group
+        )
+        self.chrome_link_card.button.clicked.connect(
+            lambda: webbrowser.open('https://www.google.cn/intl/zh-CN/chrome/')
+        )
+        
+        # 添加卡片到组
+        self.browser_group.addSettingCard(self.chrome_link_card)
+        
+        # 创建GitHub账号组
+        self.github_group = SettingCardGroup("GitHub账号准备", self)
+        
+        # 创建GitHub注册卡片
+        self.github_register_card = PrimaryPushSettingCard(
+            self.tr('注册GitHub账号'),
+            FluentIcon.GITHUB,
+            "还没有GitHub账号？点击注册",
+            "点击注册账号",
+            self.github_group
+        )
+        self.github_register_card.button.clicked.connect(
+            lambda: webbrowser.open('https://github.com/signup')
+        )
+        
+        # 创建GitHub登录卡片
+        self.github_login_card = PrimaryPushSettingCard(
+            self.tr('登录GitHub账号'),
+            FluentIcon.PEOPLE,
+            "请在Chrome浏览器中登录GitHub账号",
+            "点击在浏览器中登录",
+            self.github_group
+        )
+        self.github_login_card.button.clicked.connect(
+            lambda: webbrowser.open('https://github.com/login')
+        )
+        
+        # 添加卡片到组
+        self.github_group.addSettingCard(self.github_register_card)
+        self.github_group.addSettingCard(self.github_login_card)
+        
+        # 添加所有组件到主布局
+        self.vBoxLayout.addWidget(self.browser_group)
+        self.vBoxLayout.addWidget(self.github_group)
+        self.vBoxLayout.addStretch(1)
+        
+        # 设置样式
+        self.setStyleSheet("""
+            #progressLabel {
+                font-size: 14px;
+                color: #666666;
+                margin-top: 5px;
+                margin-bottom: 5px;
+            }
+        """)
+        
+    def open_github_login(self):
+        """打开GitHub登录页面"""
+        webbrowser.open('https://github.com/login')
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = MainWindow()

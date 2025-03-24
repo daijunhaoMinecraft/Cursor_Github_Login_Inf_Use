@@ -67,14 +67,232 @@ class CursorAuthBot:
         print(f"找到GitHub认证链接: {href}")
         return href
         
+    def handle_reauthorization(self):
+        """处理GitHub重新授权页面"""
+        print("等待5秒后检查是否需要重新授权...")
+        time.sleep(5)  # 先等待5秒
+        
+        try:
+            # 检查各种可能的元素
+            selectors = [
+                ('xpath', '//h2[contains(text(), "Reauthorization required")]'),
+                ('css', 'button.js-oauth-authorize-btn'),
+                ('xpath', '//button[contains(text(), "Authorize getcursor")]'),
+                ('xpath', '//button[contains(@class, "btn-primary") and contains(@class, "width-full")]'),
+                ('xpath', '//button[contains(@class, "js-oauth-authorize-btn")]'),
+                ('xpath', '//div[contains(@class, "Box-footer")]//button[contains(@class, "btn-primary")]')
+            ]
+            
+            for selector_type, selector in selectors:
+                try:
+                    if selector_type == 'xpath':
+                        element = self.tab.ele(f'xpath:{selector}')
+                    else:
+                        element = self.tab.ele(selector)
+                        
+                    if element:
+                        print(f"找到目标元素: {selector}")
+                        if "button" in selector or "btn" in selector:
+                            print("找到授权按钮，等待10秒后点击...")
+                            time.sleep(10)  # 等待10秒后再点击
+                            element.click()
+                            print("已点击授权按钮，等待页面跳转...")
+                            time.sleep(10)  # 增加等待时间到10秒
+                            return True
+                except Exception as e:
+                    print(f"使用选择器 {selector} 查找元素失败: {e}")
+                    continue
+                    
+            print("未找到需要授权的元素")
+            return False
+            
+        except Exception as e:
+            print(f"检查重新授权页面时出错: {e}")
+        return False
+
+    def wait_page_load(self, timeout=10):
+        """等待页面加载完成"""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                # 检查页面加载状态
+                ready_state = self.tab.run_js('return document.readyState')
+                if ready_state == 'complete':
+                    return True
+            except:
+                pass
+            time.sleep(0.5)
+        return False
+
+    def check_page_loading(self):
+        """检查页面是否正在加载"""
+        try:
+            ready_state = self.tab.run_js('return document.readyState')
+            return ready_state == 'loading'
+        except:
+            return False
+
+    def wait_for_auth_completion(self, max_wait_time=60):
+        """等待GitHub授权完成"""
+        print("等待GitHub授权完成...")
+        start_time = time.time()
+        last_url = None
+        
+        while time.time() - start_time < max_wait_time:
+            current_url = self.tab.url
+            
+            # 只在URL变化时打印
+            if current_url != last_url:
+                print(f"当前页面URL: {current_url}")
+                last_url = current_url
+                # 当URL变化时，等待页面加载完成
+                print("等待页面加载完成...")
+                self.wait_page_load()
+            
+            # 如果已经跳转到cursor.com，直接进入下一步
+            if "cursor.com" in current_url:
+                print("检测到已成功跳转到Cursor页面")
+                return True
+            
+            # 如果在GitHub页面
+            if "github.com" in current_url:
+                # 检查是否遇到速率限制
+                try:
+                    rate_limit_text = self.tab.ele('xpath://p[contains(text(), "You have exceeded a secondary rate limit")]')
+                    if rate_limit_text:
+                        print("检测到GitHub速率限制提示")
+                        print("等待30秒后重试...")
+                        time.sleep(30)
+                        continue
+                except:
+                    pass
+                
+                # 检查是否在授权页面
+                if "authorize" in current_url:
+                    print("检测到GitHub授权页面，等待页面元素加载...")
+                    time.sleep(2)  # 额外等待一下以确保按钮可点击
+                    
+                    try:
+                        # 移除按钮的hover限制
+                        js_code = """
+                        var style = document.createElement('style');
+                        style.innerHTML = `
+                            .btn-primary:not(:disabled):hover {
+                                background-color: var(--color-btn-primary-bg) !important;
+                            }
+                            .btn-primary {
+                                pointer-events: auto !important;
+                                opacity: 1 !important;
+                            }
+                        `;
+                        document.head.appendChild(style);
+                        
+                        // 移除所有按钮的disabled属性和hover限制
+                        document.querySelectorAll('button').forEach(button => {
+                            button.disabled = false;
+                            button.style.pointerEvents = 'auto';
+                            button.style.opacity = '1';
+                        });
+                        """
+                        self.tab.run_js(js_code)
+                        print("已移除按钮限制")
+                        
+                        # 尝试查找并点击授权按钮
+                        selectors = [
+                            'button.js-oauth-authorize-btn.btn.btn-primary.width-full.ws-normal',
+                            'xpath://button[contains(@class, "js-oauth-authorize-btn")]',
+                            'xpath://button[contains(text(), "Authorize getcursor")]',
+                            'xpath://button[contains(@class, "btn-primary") and contains(@class, "width-full")]',
+                            'xpath://div[contains(@class, "Box-footer")]//button[contains(@class, "btn-primary")]'
+                        ]
+                        
+                        for selector in selectors:
+                            try:
+                                button = self.tab.ele(selector)
+                                if button:
+                                    print(f"找到授权按钮 [{selector}]")
+                                    
+                                    # 检查按钮是否被禁用
+                                    is_disabled = button.attr('disabled')
+                                    if is_disabled:
+                                        print("授权按钮当前处于禁用状态，尝试启用...")
+                                        # 使用JavaScript启用按钮
+                                        self.tab.run_js(f"""
+                                            document.querySelector('{selector}').disabled = false;
+                                            document.querySelector('{selector}').style.pointerEvents = 'auto';
+                                            document.querySelector('{selector}').style.opacity = '1';
+                                        """)
+                                        time.sleep(1)
+                                    
+                                    print("等待3秒后点击授权按钮...")
+                                    time.sleep(3)
+                                    button.click()
+                                    print("已点击授权按钮，等待页面响应...")
+                                    time.sleep(2)
+                                    
+                                    # 检查按钮是否还存在
+                                    try:
+                                        button_still_exists = self.tab.ele(selector)
+                                        if button_still_exists:
+                                            print("授权按钮仍然存在，尝试再次点击...")
+                                            # 再次移除限制并点击
+                                            self.tab.run_js(js_code)
+                                            time.sleep(1)
+                                            button_still_exists.click()
+                                            print("已再次点击授权按钮，等待页面响应...")
+                                            time.sleep(2)
+                                            
+                                            # 最后检查按钮是否还存在
+                                            try:
+                                                if self.tab.ele(selector):
+                                                    print("授权按钮依然存在，可能存在问题，等待5秒后继续...")
+                                                    time.sleep(5)
+                                            except:
+                                                print("授权按钮已消失，继续等待跳转...")
+                                    except:
+                                        print("授权按钮已消失，继续等待跳转...")
+                                    
+                                    break
+                            except Exception as e:
+                                print(f"使用选择器 {selector} 查找或点击按钮失败: {e}")
+                                continue
+                    except Exception as e:
+                        print(f"处理授权按钮时出错: {e}")
+                
+                # 只有在登录页面时才检查登录状态
+                elif "login" in current_url and not "oauth" in current_url:
+                    print("检测到可能是登录页面，等待页面元素加载...")
+                    time.sleep(2)  # 额外等待一下以确保表单加载完成
+                    
+                    # 检查是否有登录表单
+                    login_form = self.tab.ele('xpath://form[contains(@action, "session")]')
+                    if login_form:
+                        print("检测到GitHub登录页面，用户未登录GitHub")
+                        raise Exception("用户未登录GitHub，请先登录后再试")
+            
+            time.sleep(2)  # 每2秒检查一次
+            
+        print("等待授权完成超时")
+        return False
+
     def get_cursor_cookies(self, max_retries=5):
         """获取Cursor网站的cookie，最多重试5次"""
         print("正在获取Cursor的cookies...")
-        # 先访问cursor.com域名
-        self.tab.get("https://cursor.com")
         
+        # 先等待授权完成
+        if not self.wait_for_auth_completion():
+            print("授权未完成，无法获取cookies")
+            return []
+            
         for attempt in range(max_retries):
             print(f"\n=== 第 {attempt + 1} 次尝试获取cookies ===")
+            
+            # 确保在cursor.com域名下
+            if "cursor.com" not in self.tab.url:
+                self.tab.get("https://cursor.com")
+                print("等待页面加载...")
+                time.sleep(5)
+            
             # 获取所有cookies并过滤
             all_cookies = self.tab.cookies()
             print(f"获取到 {len(all_cookies)} 个cookies")
@@ -86,8 +304,8 @@ class CursorAuthBot:
                     return [cookie]  # 只返回需要的cookie
             
             if attempt < max_retries - 1:  # 如果不是最后一次尝试
-                print("未找到 WorkosCursorSessionToken，等待5秒后重试...")
-                time.sleep(5)
+                print("未找到 WorkosCursorSessionToken，等待10秒后重试...")
+                time.sleep(10)
             else:
                 print("已达到最大重试次数，仍未找到 WorkosCursorSessionToken")
                 return []
@@ -190,7 +408,7 @@ class CursorAuthBot:
             
             print("正在打开认证链接...")
             self.tab.get(auth_link)
-            print("等待5秒...")
+            print("等待页面加载...")
             time.sleep(5)
             
             cookies = self.get_cursor_cookies()
@@ -208,7 +426,7 @@ class CursorAuthBot:
                 auth_link = self.get_github_auth_link()
                 print("正在打开认证链接...")
                 self.tab.get(auth_link)
-                print("等待5秒...")
+                print("等待页面加载...")
                 time.sleep(5)
                 
                 # 获取新的cookies（带重试机制）
