@@ -50,6 +50,11 @@ class BrowserManager:
         co.set_pref("profile.password_manager_enabled", True)
         co.set_argument("--hide-crash-restore-bubble")
         
+        # 添加隐藏浏览器的设置
+        co.set_argument('--window-position=-32000,-32000')  # 将窗口移到屏幕外
+        co.set_argument('--window-size=1,1')  # 设置窗口大小为最小
+        co.set_argument('--start-minimized')  # 启动时最小化
+        
         proxy = os.getenv("BROWSER_PROXY")
         if proxy:
             co.set_proxy(proxy)
@@ -57,9 +62,8 @@ class BrowserManager:
         if user_agent:
             co.set_user_agent(user_agent)
 
-        co.headless(
-            os.getenv("BROWSER_HEADLESS", "True").lower() == "true"
-        )
+        # 默认设置为隐藏模式
+        co.headless(True)
 
         # Mac 系统特殊处理
         if sys.platform == "darwin":

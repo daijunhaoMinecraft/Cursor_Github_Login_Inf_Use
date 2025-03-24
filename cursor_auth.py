@@ -8,9 +8,6 @@ from reset_machine import MachineIDResetter
 from cursor_auth_manager import CursorAuthManager
 import sys
 
-# 设置环境变量，使浏览器可视化运行
-os.environ['BROWSER_HEADLESS'] = 'False'
-
 class CursorAuthBot:
     def __init__(self):
         self.browser_manager = BrowserManager()
