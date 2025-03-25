@@ -9,6 +9,7 @@
 ![PixPin_2025-03-23_15-49-49.png](https://x19.fp.ps.netease.com/file/67dfc2fcaf2708f5727d60d2Azj9ftNI06)
 ![PixPin_2025-03-23_15-51-24.png](https://x19.fp.ps.netease.com/file/67dfc2ffb695d0f275b4c6258SjBPs9006)
 ![PixPin_2025-03-23_15-53-02.png](https://x19.fp.ps.netease.com/file/67dfc3020490a1b21711b9f7yrUezPF106)
+<br />注:新版本使用的是图形化界面,"开始认证"就是开始使用github账号去进行cursor白嫖<br />
 ![PixPin_2025-03-23_16-10-52.png](https://x19.fp.ps.netease.com/file/67dfc3090ea0e3b0f4cf2f02skpvGNuh06)
 ![PixPin_2025-03-23_16-14-28.png](https://x19.fp.ps.netease.com/file/67dfc30c3d2b0e85fe64e50dff1QT7Hp06)
 # 注意事项
