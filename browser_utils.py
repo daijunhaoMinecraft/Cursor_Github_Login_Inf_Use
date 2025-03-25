@@ -46,24 +46,43 @@ class BrowserManager:
             co.set_argument('--disable-web-security')
             co.set_argument('--remote-debugging-port=0')
 
+        # 基本设置
         co.set_pref("credentials_enable_service", True)
         co.set_pref("profile.password_manager_enabled", True)
         co.set_argument("--hide-crash-restore-bubble")
         
-        # 添加隐藏浏览器的设置
-        co.set_argument('--window-position=-32000,-32000')  # 将窗口移到屏幕外
-        co.set_argument('--window-size=1,1')  # 设置窗口大小为最小
-        co.set_argument('--start-minimized')  # 启动时最小化
-        
+        # 隐藏浏览器相关设置
+        is_headless = os.getenv("BROWSER_HEADLESS", "True").lower() == "true"
+        if is_headless:
+            co.set_argument("--headless=new")  # 使用新版无头模式
+            # 确保JavaScript和其他功能正常运行
+            co.set_argument("--disable-gpu")  # 禁用GPU加速
+            co.set_argument("--no-sandbox")  # 禁用沙箱模式
+            co.set_argument("--disable-dev-shm-usage")  # 禁用/dev/shm使用
+            co.set_argument("--window-size=1920,1080")  # 设置窗口大小
+            co.set_argument("--start-maximized")  # 最大化窗口
+            co.set_argument("--enable-javascript")  # 确保启用JavaScript
+            co.set_argument("--disable-notifications")  # 禁用通知
+            co.set_argument("--ignore-certificate-errors")  # 忽略证书错误
+            co.set_argument("--allow-running-insecure-content")  # 允许运行不安全内容
+            co.set_argument("--disable-blink-features=AutomationControlled")  # 禁用自动化标记
+            co.set_argument("--disable-extensions")  # 禁用扩展
+            
+            # 设置一些性能相关的参数
+            co.set_pref("profile.default_content_setting_values.images", 2)  # 禁用图片加载以提高性能
+            co.set_pref("profile.managed_default_content_settings.javascript", 1)  # 启用JavaScript
+            
+            print("浏览器将以隐藏模式运行")
+
         proxy = os.getenv("BROWSER_PROXY")
         if proxy:
             co.set_proxy(proxy)
 
         if user_agent:
             co.set_user_agent(user_agent)
-
-        # 默认设置为隐藏模式
-        co.headless(True)
+        else:
+            # 设置默认user-agent
+            co.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
 
         # Mac 系统特殊处理
         if sys.platform == "darwin":
